@@ -23,7 +23,7 @@ def client():
             filename = input(" >")
             key = filename[0].lower()
             newFilename = filename
-            filename = 'client_files/' + 'color.txt' 
+            filename = 'client_files/' + filename
             print("FILENAME", filename)
             file = open(filename, "r") # r -> read
             data = file.read()
