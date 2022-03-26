@@ -31,7 +31,6 @@ def client():
             msg = operation + '||' + key + '||' + newFilename + '||' + data
             mySocket.send(msg.encode())
             serverData = mySocket.recv(1024).decode()
-            print(serverData)          
 
         elif operation == '2': #GET
             print(' [x] Escriba la clave para ver los archivos disponibles (solo una letra): ')

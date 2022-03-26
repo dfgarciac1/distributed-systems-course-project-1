@@ -1,11 +1,19 @@
 import socket
 import sys
 from _thread import *
+import os
+import subprocess
+    
+os.environ['NODE1_HOST'] = '127.0.0.1'
+os.environ['NODE2_HOST'] = '127.0.0.1'
+os.environ['NODE3_HOST'] = '127.0.0.1'
+os.environ['NODE1_PORT'] = "8001"
+os.environ['NODE2_PORT'] = "8002"
+os.environ['NODE3_PORT'] = "8003"
+
 
 nodes = {
-    'node1' : ('127.0.0.1', 8001), #8 letras (a-h)
-    'node2' : ('127.0.0.1', 8000), #9 letras (i-q)
-    'node3' : ('127.0.0.1', 8003)  #9 letras (r-z)
+ 
 }
 
 #Método que recibe los datos del cliente y ejecuta la lógica del servidor
@@ -21,7 +29,8 @@ def server(client):
         
         if len(dataClient):
             dataClientArray = dataClient.split('||')
-            host_node, port = chooseNode(dataClientArray[1])
+            print("SOY EL DATA CLIENT", dataClientArray)
+            host_node, port =  chooseNode(dataClientArray[1])
             sendToNode(dataClient, host_node, port)
 
 #Método que convierte la clave enviada por el cliente a número segun ASCII
@@ -34,19 +43,47 @@ def convertToAscii(letter):
 def chooseNode(key):
 
     newKey = convertToAscii(key)
+    nodeSocket = socket.socket()
 
     if newKey >= 97 and newKey <= 104: #8 letras (a-h)
+        if 'node1' in nodes:
+            return nodes['node1']
+        else:
+            try:
+             nodeSocket.connect( (os.environ.get("NODE1_HOST"),  int(os.getenv("NODE1_PORT"),)))
+            except:
+                subprocess.call("node.py "+ os.getenv("NODE1_PORT"), shell=True)
+                print("")
+            nodes['node1'] = (os.environ.get("NODE1_HOST"), int(os.getenv("NODE1_PORT")))
         return nodes['node1']
     elif newKey >= 105 and newKey <= 113: #9 letras (i-q)
-        return nodes['node2']
+        if 'node2' in nodes:
+            return nodes['node2']
+        else:
+            try:
+             nodeSocket.connect( (os.environ.get("NODE2_HOST"),  int(os.getenv("NODE2_PORT"),)))
+            except:
+                subprocess.call("node.py "+ os.getenv("NODE2_PORT"), shell=True)
+                print("EJECUTE EN 2 ")
+            nodes['node2'] = (os.environ.get("NODE2_HOST"), int(os.getenv("NODE2_PORT")))       
+            return nodes['node2']
     elif newKey >= 114 and newKey <= 122: #9 letras (r-z)
-        return nodes['node3']
+        if 'node3' in nodes:
+            return nodes['node3']
+        else:
+            try:
+             nodeSocket.connect( (os.environ.get("NODE3_HOST"),  int(os.getenv("NODE3_PORT"),)))
+            except:
+                subprocess.call("node.py "+ os.getenv("NODE3_PORT"), shell=True)
+            nodes['node3'] = (os.environ.get("NODE3_HOST"), int(os.getenv("NODE3_PORT")))       
+            return nodes['node3']
     else:
         return nodes['node3']
 
 #Método que envía la información del cliente al nodo y luego del servidor al cliente
 def sendToNode(data, host_node, port):
-
+    print("SOY EL HOST NODE ",(host_node))
+    print("SOY EL PORT NODE ",(port))
     nodeSocket = socket.socket()
     nodeSocket.connect( (host_node, port) )
     nodeSocket.send(data.encode())
