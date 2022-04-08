@@ -1,41 +1,50 @@
 import socket
 import sys
 from _thread import *
-import os
-import subprocess
-    
-os.environ['NODE1_HOST'] = '127.0.0.1'
-os.environ['NODE2_HOST'] = '127.0.0.1'
-os.environ['NODE3_HOST'] = '127.0.0.1'
-os.environ['NODE1_PORT'] = "8001"
-os.environ['NODE2_PORT'] = "8002"
-os.environ['NODE3_PORT'] = "8003"
 
+nodes = []
 
-nodes = {
- 
-}
+letrasAscii = list(range(33,127))
+
+def splitArray(a, n):
+    k, m = divmod(len(a), n)
+    return list(a[i*k + min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
+
+def createRequest(data):
+    header = f"{len(data):<{30}}".encode()
+    return header+data
 
 #Método que recibe los datos del cliente y ejecuta la lógica del servidor
 def server(client):
-
-    while True:
-
+    message_header = client.recv(30)
+    message_length = int(message_header.decode().strip())
+    datos = b''
+    while len(datos)<message_length:
         try:
-            dataClient = client.recv(1024).decode()
-        except error:
-            print('Error de lectura.')
-            break
-        
-        if len(dataClient):
-            dataClientArray = dataClient.split('||')
-            print("SOY EL DATA CLIENT", dataClientArray)
+            dataClient = client.recv(1024)
+            if not dataClient:
+                break
+            datos += dataClient
+        except:
+            raise
+    dataClientArray = datos.decode().split('||')
+    if dataClientArray[0] == 'Reveal':
+        nodes.append(('127.0.0.1',int(dataClientArray[1])))
+        return
+    elif  dataClientArray[0] == '2':
+        host_node, port =  chooseNode(dataClientArray[1])
+        print(' [x] Enviando al cliente nodo solicitado: ',host_node, port)
+        datos = createRequest(f'{host_node}||{port}'.encode())
+        conn.send(datos)
+    else:
+        print("SOY EL DATA CLIENT", dataClientArray[:-1])
+        enviado = False
+        while not enviado:
             host_node, port =  chooseNode(dataClientArray[1])
-            sendToNode(dataClient, host_node, port)
+            enviado = sendToNode(datos, host_node, port)
 
 #Método que convierte la clave enviada por el cliente a número segun ASCII
 def convertToAscii(letter):
-
     num = ord(letter)
     return num
 
@@ -43,54 +52,42 @@ def convertToAscii(letter):
 def chooseNode(key):
 
     newKey = convertToAscii(key)
-    nodeSocket = socket.socket()
-
-    if newKey >= 97 and newKey <= 104: #8 letras (a-h)
-        if 'node1' in nodes:
-            return nodes['node1']
-        else:
-            try:
-             nodeSocket.connect( (os.environ.get("NODE1_HOST"),  int(os.getenv("NODE1_PORT"),)))
-            except:
-                subprocess.call("node.py "+ os.getenv("NODE1_PORT"), shell=True)
-                print("")
-            nodes['node1'] = (os.environ.get("NODE1_HOST"), int(os.getenv("NODE1_PORT")))
-        return nodes['node1']
-    elif newKey >= 105 and newKey <= 113: #9 letras (i-q)
-        if 'node2' in nodes:
-            return nodes['node2']
-        else:
-            try:
-             nodeSocket.connect( (os.environ.get("NODE2_HOST"),  int(os.getenv("NODE2_PORT"),)))
-            except:
-                subprocess.call("node.py "+ os.getenv("NODE2_PORT"), shell=True)
-                print("EJECUTE EN 2 ")
-            nodes['node2'] = (os.environ.get("NODE2_HOST"), int(os.getenv("NODE2_PORT")))       
-            return nodes['node2']
-    elif newKey >= 114 and newKey <= 122: #9 letras (r-z)
-        if 'node3' in nodes:
-            return nodes['node3']
-        else:
-            try:
-             nodeSocket.connect( (os.environ.get("NODE3_HOST"),  int(os.getenv("NODE3_PORT"),)))
-            except:
-                subprocess.call("node.py "+ os.getenv("NODE3_PORT"), shell=True)
-            nodes['node3'] = (os.environ.get("NODE3_HOST"), int(os.getenv("NODE3_PORT")))       
-            return nodes['node3']
+    if len(nodes) > 1:
+        particion = splitArray(letrasAscii,len(nodes))
+        for index,letras in enumerate(particion):
+            if newKey in letras:
+                return nodes[index]
     else:
-        return nodes['node3']
+        return nodes[0]
 
 #Método que envía la información del cliente al nodo y luego del servidor al cliente
 def sendToNode(data, host_node, port):
     print("SOY EL HOST NODE ",(host_node))
     print("SOY EL PORT NODE ",(port))
-    nodeSocket = socket.socket()
-    nodeSocket.connect( (host_node, port) )
-    nodeSocket.send(data.encode())
-    dataNode = nodeSocket.recv(1024).decode()
-    print(' [x] Enviando: ' + dataNode)
-    conn.send(dataNode.encode())
+    try: 
+        nodeSocket = socket.socket()
+        nodeSocket.connect( (host_node, port) )
+    except:
+        nodes.remove((host_node, port))
+        return False
+    peticion = createRequest(data)
+    nodeSocket.sendall(peticion)
+    message_header = nodeSocket.recv(30)
+    message_length = int(message_header.decode().strip())
+    datos = b''
+    while len(datos)<message_length:
+        try:
+            dataClient = nodeSocket.recv(1024)
+            if not dataClient:
+                break
+            datos += dataClient
+        except:
+            raise
+    respuesta = createRequest(datos)
+    conn.send(respuesta)
     nodeSocket.close()
+    
+    return True
 
 #Método que identifica los parámetros al ejecutar la aplicación
 def parameters():
@@ -107,8 +104,10 @@ def parameters():
         
     return port
 
+
 if __name__ == '__main__':
     try:
+        
         mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         host = '0.0.0.0'
         port = int(parameters())
@@ -119,8 +118,8 @@ if __name__ == '__main__':
         
         while True:
             conn, addr = mySocket.accept()
-            print(" [x] Conexión desde: " + str(addr))
-            start_new_thread(server, (conn, ))
+            print(" [x] Conexión desde: ", str(addr))
+            start_new_thread(server, (conn,))
 
     except Exception as error:
         print(socket.error)
